@@ -1,0 +1,111 @@
+#!/usr/bin/env node
+
+const program = require('commander')
+const download = require('download-git-repo')
+const ora = require('ora')
+const exists = require('fs').existsSync
+const inquirer = require('inquirer')
+const path = require('path')
+const home = require('user-home')
+const chalk = require('chalk')
+const rm = require('rimraf').sync
+const logger = require('../lib/logger')
+const generate = require('../lib/generate')
+
+
+
+/**
+ * Usage.
+ */
+
+program
+  .usage('<template-address> [project-name]')
+
+  /**
+ * Help.
+ */
+
+program.on('--help', () => {
+  console.log('  Examples:')
+  console.log()
+  console.log(chalk.gray('    # create a new project with template'))
+  console.log('    $ vt init my-project')
+
+})
+
+/**
+ * Help.
+ */
+
+function help () {
+  program.parse(process.argv)
+  if (program.args.length < 1) return program.help()
+}
+help()
+
+const rawName = program.args[0]
+const inPlace = !rawName || rawName === '.'
+const templateaddress = program.args[1]
+const name = inPlace ? path.relative('../', process.cwd()) : rawName
+const to = path.resolve(rawName || '.')
+const tmp = path.join(home, 'vue-webpack-elementui-template','Vue-Webpack-ElementUI-Template')
+
+console.log()
+process.on('exit', () => {
+  console.log()
+})
+
+if (inPlace || exists(to)) {
+  inquirer.prompt([{
+    type: 'confirm',
+    message: inPlace
+      ? 'Generate project in current directory?'
+      : 'Target directory exists. Continue?',
+    name: 'ok'
+  }]).then(answers => {
+    if (answers.ok) {
+      run()
+    }
+  }).catch(logger.fatal)
+} else {
+  run()
+}
+
+/**
+ * Check, download and generate the project.
+ * Revised to get template from bit bucket
+ */
+
+
+function run () {
+
+  const templateAddress = "direct:" + templateaddress
+
+  downloadAndGenerate(templateAddress)
+
+
+}
+
+
+/**
+ * Download a generate from a template repo.
+ *
+ * @param {String} templateAddress
+ */
+
+function downloadAndGenerate (templateAddress) {
+  const spinner = ora('downloading template')
+  spinner.start()
+  // Remove if local template exists
+  if (exists(tmp)) rm(tmp)
+  download(templateAddress, tmp, { clone: true }, err => {
+    spinner.stop()
+    
+    if (err) logger.fatal('Failed to download repo ' + templateAddress + ': ' + err.message.trim())
+    generate(name, tmp, to, err => {
+      if (err) logger.fatal(err)
+      console.log()
+      logger.success('Generated "%s".', name)
+    })
+  })
+}
